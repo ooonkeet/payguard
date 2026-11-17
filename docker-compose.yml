@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: payguard-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-payguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-payguard_sandbox}
+      POSTGRES_DB: ${POSTGRES_DB:-payguard}
+    ports:
+      - "5432:5432"
+    volumes:
+      - payguard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-payguard} -d ${POSTGRES_DB:-payguard}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: payguard-backend
+    environment:
+      APP_ENV: SANDBOX
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-payguard}:${POSTGRES_PASSWORD:-payguard_sandbox}@postgres:5432/${POSTGRES_DB:-payguard}
+      TEST_DATABASE_URL: sqlite:////app/payguard_test.db
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-whsec_sandbox_docker_secret}
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN:-pg_sandbox_docker_token}
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./reports:/app/reports
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    container_name: payguard-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  payguard_pgdata:
+
