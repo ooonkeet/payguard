@@ -137,6 +137,27 @@ def test_concurrent_duplicate_payment_requests_create_single_transaction(
     assert len(listed) == 1
 
 
+@pytest.mark.edge_case
+def test_concurrent_idempotent_requests_with_real_delay_all_return_settled_status(
+    client: TestClient, payment_payload_factory, monkeypatch
+) -> None:
+    """Regression test for in-flight concurrency race: concurrent replays must wait for settled state."""
+    monkeypatch.setenv("PAYGUARD_FAST_SIMULATION", "0")
+    payload = payment_payload_factory(idempotency_key="idem-concurrent-real-delay-001", amount="1850.00")
+
+    def submit(_: int):
+        return client.post("/api/v1/payments", json=payload)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        responses = list(pool.map(submit, range(8)))
+
+    assert all(r.status_code in (200, 201) for r in responses)
+    assert len({r.json()["data"]["transaction_id"] for r in responses}) == 1
+    statuses = [r.json()["data"]["status"] for r in responses]
+    assert all(s == "SUCCESS" for s in statuses), f"Expected all SUCCESS, got {statuses}"
+    assert all(r.json()["data"]["response_code"] == "PG_200_APPROVED" for r in responses)
+
+
 @pytest.mark.regression
 def test_refund_successful_transaction_transitions_to_refunded(client: TestClient, payment_payload_factory) -> None:
     tx = client.post("/api/v1/payments", json=payment_payload_factory(scenario="successful_payment")).json()["data"]

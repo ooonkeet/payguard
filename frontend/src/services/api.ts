@@ -195,8 +195,8 @@ export const payguardApi = {
   },
 
   // Reports
-  getReportMetrics: async () => {
-    const { data } = await apiClient.get('/api/v1/reports/metrics');
+  getReportMetrics: async (params?: { suite_name?: string; include_seeded?: boolean }) => {
+    const { data } = await apiClient.get('/api/v1/reports/metrics', { params });
     return data.data;
   },
   getTransactionsCsvUrl: () => `${API_BASE_URL}/api/v1/reports/transactions.csv`,

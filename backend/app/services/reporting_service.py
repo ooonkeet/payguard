@@ -3,7 +3,7 @@
 import csv
 import io
 from collections import Counter
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -16,11 +16,31 @@ from app.models.transaction import Transaction
 PLANNED_TEST_SCENARIO_CATALOG = 55
 
 
-def get_quality_metrics(db: Session) -> Dict[str, Any]:
-    runs = db.scalars(select(TestRun).order_by(desc(TestRun.started_at))).all()
-    results = db.scalars(select(TestResult).order_by(desc(TestResult.created_at))).all()
-    bugs = db.scalars(select(Bug).order_by(desc(Bug.created_at))).all()
-    transactions = db.scalars(select(Transaction)).all()
+def get_quality_metrics(
+    db: Session,
+    suite_name: Optional[str] = None,
+    include_seeded: bool = True,
+) -> Dict[str, Any]:
+    run_stmt = select(TestRun).order_by(desc(TestRun.started_at))
+    tx_stmt = select(Transaction)
+    bug_stmt = select(Bug).order_by(desc(Bug.created_at))
+
+    if suite_name and suite_name != "ALL":
+        run_stmt = run_stmt.where(TestRun.suite_name == suite_name)
+    if not include_seeded:
+        run_stmt = run_stmt.where(TestRun.is_seeded.is_(False))
+        tx_stmt = tx_stmt.where(Transaction.is_seeded.is_(False))
+        bug_stmt = bug_stmt.where(Bug.is_seeded.is_(False))
+
+    runs = db.scalars(run_stmt).all()
+    run_ids = [r.run_id for r in runs]
+    results = (
+        db.scalars(select(TestResult).where(TestResult.run_id.in_(run_ids)).order_by(desc(TestResult.created_at))).all()
+        if run_ids
+        else []
+    )
+    bugs = db.scalars(bug_stmt).all()
+    transactions = db.scalars(tx_stmt).all()
 
     total_test_cases_executed = sum(r.total_tests for r in runs)
     total_passed = sum(r.passed for r in runs)

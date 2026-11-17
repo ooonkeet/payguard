@@ -300,13 +300,37 @@ export const PaymentSimulatorPage: React.FC = () => {
             </button>
 
             {lastResult && (
-              <button
-                type="button"
-                onClick={() => setShowModal(true)}
-                className="pg-btn-secondary text-xs"
-              >
-                View Last Result
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => simulateMutation.mutate()}
+                  disabled={simulateMutation.isPending}
+                  className="pg-btn-secondary text-xs"
+                  title="Resubmit identical payload with the same idempotency key to verify HTTP 200 replay"
+                >
+                  Replay Same Key (200)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const bumped = (Number(amount || '100') + 100).toFixed(2);
+                    setAmount(bumped);
+                    setConflictError(null);
+                  }}
+                  disabled={simulateMutation.isPending}
+                  className="pg-btn-secondary text-xs"
+                  title="Bump amount while keeping the same idempotency key, then submit to test HTTP 409 Conflict"
+                >
+                  Mutate Amount (Test 409)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(true)}
+                  className="pg-btn-secondary text-xs"
+                >
+                  View Last Result
+                </button>
+              </>
             )}
           </div>
         </form>

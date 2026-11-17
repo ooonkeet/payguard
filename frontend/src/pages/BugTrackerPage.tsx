@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bug as BugIcon, Plus, Search, Trash2, X } from 'lucide-react';
+import { Bug as BugIcon, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState, ErrorBanner, TableSkeleton } from '../components/FeedbackStates';
 import { SeededBadge, StatusBadge } from '../components/StatusBadge';
@@ -25,6 +25,8 @@ export const BugTrackerPage: React.FC = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedBug, setSelectedBug] = useState<Bug | null>(null);
+  const [isEditingBug, setIsEditingBug] = useState(false);
+  const [editDraft, setEditDraft] = useState<Partial<Bug>>({});
   const [deleteTarget, setDeleteTarget] = useState<Bug | null>(null);
 
   // Create form state
@@ -98,13 +100,30 @@ export const BugTrackerPage: React.FC = () => {
   const updateMutation = useMutation({
     mutationFn: ({ bugId, patch }: { bugId: string; patch: Partial<Bug> }) => payguardApi.updateBug(bugId, patch),
     onSuccess: (updated) => {
-      addToast('success', 'Defect Updated', `${updated.bug_id} is now ${updated.status}.`);
+      addToast('success', 'Defect Updated', `${updated.bug_id} saved (${updated.status}).`);
       setSelectedBug(updated);
+      setIsEditingBug(false);
       queryClient.invalidateQueries({ queryKey: ['bugs'] });
       queryClient.invalidateQueries({ queryKey: ['reports'] });
     },
     onError: (err) => addToast('error', 'Update Failed', extractErrorMessage(err)),
   });
+
+  const openBugDetail = (bug: Bug) => {
+    setSelectedBug(bug);
+    setIsEditingBug(false);
+    setEditDraft({
+      title: bug.title,
+      description: bug.description,
+      severity: bug.severity,
+      priority: bug.priority,
+      module: bug.module,
+      reproduction_steps: bug.reproduction_steps || '',
+      expected_result: bug.expected_result || '',
+      actual_result: bug.actual_result || '',
+      associated_test_case: bug.associated_test_case || '',
+    });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (bugId: string) => payguardApi.deleteBug(bugId),
@@ -202,7 +221,7 @@ export const BugTrackerPage: React.FC = () => {
                 {bugs.map((bug) => (
                   <tr
                     key={bug.bug_id}
-                    onClick={() => setSelectedBug(bug)}
+                    onClick={() => openBugDetail(bug)}
                     className="hover:bg-[#161C27] cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-2.5 font-mono text-slate-100 whitespace-nowrap">
@@ -358,55 +377,196 @@ export const BugTrackerPage: React.FC = () => {
                 <StatusBadge value={selectedBug.severity} />
                 <StatusBadge value={selectedBug.status} />
               </div>
-              <button onClick={() => setSelectedBug(null)} className="text-slate-400 hover:text-slate-200">
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {!isEditingBug && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingBug(true)}
+                    className="pg-btn-secondary py-1 px-2.5 text-[11px]"
+                  >
+                    <Pencil className="h-3 w-3" /> Edit Defect
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedBug(null);
+                    setIsEditingBug(false);
+                  }}
+                  className="text-slate-400 hover:text-slate-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-              <div>
-                <h3 className="text-base font-semibold text-slate-100">{selectedBug.title}</h3>
-                <p className="text-slate-300 mt-1.5 leading-relaxed">{selectedBug.description}</p>
-              </div>
+              {isEditingBug ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    updateMutation.mutate({
+                      bugId: selectedBug.bug_id,
+                      patch: {
+                        title: editDraft.title,
+                        description: editDraft.description,
+                        severity: editDraft.severity,
+                        priority: editDraft.priority,
+                        module: editDraft.module,
+                        reproduction_steps: editDraft.reproduction_steps,
+                        expected_result: editDraft.expected_result,
+                        actual_result: editDraft.actual_result,
+                        associated_test_case: editDraft.associated_test_case || undefined,
+                      },
+                    });
+                  }}
+                  className="space-y-3"
+                >
+                  <div>
+                    <label className="block text-slate-300 mb-1">Title</label>
+                    <input
+                      required
+                      value={editDraft.title || ''}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))}
+                      className="pg-input text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1">Description</label>
+                    <textarea
+                      required
+                      rows={2}
+                      value={editDraft.description || ''}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, description: e.target.value }))}
+                      className="pg-input text-xs"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-300 mb-1">Severity</label>
+                      <select
+                        value={editDraft.severity || selectedBug.severity}
+                        onChange={(e) => setEditDraft((d) => ({ ...d, severity: e.target.value as Bug['severity'] }))}
+                        className="pg-select w-full text-xs"
+                      >
+                        {SEVERITIES.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">Priority</label>
+                      <select
+                        value={editDraft.priority || selectedBug.priority}
+                        onChange={(e) => setEditDraft((d) => ({ ...d, priority: e.target.value as Bug['priority'] }))}
+                        className="pg-select w-full text-xs"
+                      >
+                        {PRIORITIES.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">Module / Category</label>
+                      <input
+                        value={editDraft.module || ''}
+                        onChange={(e) => setEditDraft((d) => ({ ...d, module: e.target.value }))}
+                        className="pg-input text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1">Steps to Reproduce</label>
+                    <textarea
+                      rows={2}
+                      value={editDraft.reproduction_steps || ''}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, reproduction_steps: e.target.value }))}
+                      className="pg-input text-xs"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-300 mb-1">Expected Result</label>
+                      <textarea
+                        rows={2}
+                        value={editDraft.expected_result || ''}
+                        onChange={(e) => setEditDraft((d) => ({ ...d, expected_result: e.target.value }))}
+                        className="pg-input text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">Actual Result</label>
+                      <textarea
+                        rows={2}
+                        value={editDraft.actual_result || ''}
+                        onChange={(e) => setEditDraft((d) => ({ ...d, actual_result: e.target.value }))}
+                        className="pg-input text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1">Associated Test Case</label>
+                    <input
+                      value={editDraft.associated_test_case || ''}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, associated_test_case: e.target.value }))}
+                      className="pg-input font-mono text-xs"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => setIsEditingBug(false)} className="pg-btn-secondary text-xs">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={updateMutation.isPending} className="pg-btn-primary text-xs">
+                      <Save className="h-3.5 w-3.5" /> Save Changes
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-100">{selectedBug.title}</h3>
+                    <p className="text-slate-300 mt-1.5 leading-relaxed">{selectedBug.description}</p>
+                  </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
-                  <p className="text-slate-500">Module</p>
-                  <p className="text-slate-200 font-medium mt-0.5">{selectedBug.module}</p>
-                </div>
-                <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
-                  <p className="text-slate-500">Environment</p>
-                  <p className="font-mono text-slate-200 mt-0.5">{selectedBug.environment}</p>
-                </div>
-                <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
-                  <p className="text-slate-500">Transaction ID</p>
-                  <p className="font-mono text-slate-200 mt-0.5 truncate">{selectedBug.transaction_id || '—'}</p>
-                </div>
-                <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
-                  <p className="text-slate-500">Test Case</p>
-                  <p className="font-mono text-slate-200 mt-0.5 truncate">{selectedBug.associated_test_case || '—'}</p>
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
+                      <p className="text-slate-500">Module</p>
+                      <p className="text-slate-200 font-medium mt-0.5">{selectedBug.module}</p>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
+                      <p className="text-slate-500">Environment</p>
+                      <p className="font-mono text-slate-200 mt-0.5">{selectedBug.environment}</p>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
+                      <p className="text-slate-500">Transaction ID</p>
+                      <p className="font-mono text-slate-200 mt-0.5 truncate">{selectedBug.transaction_id || '—'}</p>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
+                      <p className="text-slate-500">Test Case</p>
+                      <p className="font-mono text-slate-200 mt-0.5 truncate">{selectedBug.associated_test_case || '—'}</p>
+                    </div>
+                  </div>
 
-              {selectedBug.reproduction_steps && (
-                <div>
-                  <p className="font-medium text-slate-300 mb-1">Steps to Reproduce</p>
-                  <pre className="p-2.5 rounded bg-[#0D1016] border border-[#222836] text-slate-300 whitespace-pre-wrap font-sans">
-                    {selectedBug.reproduction_steps}
-                  </pre>
-                </div>
+                  {selectedBug.reproduction_steps && (
+                    <div>
+                      <p className="font-medium text-slate-300 mb-1">Steps to Reproduce</p>
+                      <pre className="p-2.5 rounded bg-[#0D1016] border border-[#222836] text-slate-300 whitespace-pre-wrap font-sans">
+                        {selectedBug.reproduction_steps}
+                      </pre>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
+                      <p className="font-medium text-emerald-400 mb-1">Expected Result</p>
+                      <p className="text-slate-300">{selectedBug.expected_result || '—'}</p>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
+                      <p className="font-medium text-red-400 mb-1">Actual Result</p>
+                      <p className="text-slate-300">{selectedBug.actual_result || '—'}</p>
+                    </div>
+                  </div>
+                </>
               )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
-                  <p className="font-medium text-emerald-400 mb-1">Expected Result</p>
-                  <p className="text-slate-300">{selectedBug.expected_result || '—'}</p>
-                </div>
-                <div className="p-2.5 rounded bg-[#0D1016] border border-[#222836]">
-                  <p className="font-medium text-red-400 mb-1">Actual Result</p>
-                  <p className="text-slate-300">{selectedBug.actual_result || '—'}</p>
-                </div>
-              </div>
 
               {/* Status Workflow Transition */}
               <div className="pt-2 border-t border-[#222836] flex flex-wrap items-center justify-between gap-3">

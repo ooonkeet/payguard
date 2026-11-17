@@ -14,6 +14,7 @@ export const TransactionsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [methodFilter, setMethodFilter] = useState('ALL');
   const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [sortBy, setSortBy] = useState<'created_at' | 'amount'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -28,13 +29,14 @@ export const TransactionsPage: React.FC = () => {
   }, [searchParams]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['transactions', search, statusFilter, methodFilter, dateFrom, sortBy, sortOrder, page],
+    queryKey: ['transactions', search, statusFilter, methodFilter, dateFrom, dateTo, sortBy, sortOrder, page],
     queryFn: () =>
       payguardApi.listPayments({
         search: search.trim() || undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
         payment_method: methodFilter !== 'ALL' ? methodFilter : undefined,
         date_from: dateFrom ? `${dateFrom}T00:00:00Z` : undefined,
+        date_to: dateTo ? `${dateTo}T23:59:59Z` : undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
         page,
@@ -71,7 +73,7 @@ export const TransactionsPage: React.FC = () => {
       </div>
 
       {/* Filters Toolbar */}
-      <div className="pg-card p-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="pg-card p-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
         <div className="relative lg:col-span-2">
           <Search className="h-3.5 w-3.5 text-slate-500 absolute left-3 top-2.5" />
           <input
@@ -129,7 +131,39 @@ export const TransactionsPage: React.FC = () => {
           }}
           className="pg-input text-xs"
           aria-label="Filter from date"
+          title="From date"
         />
+
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              setPage(1);
+            }}
+            className="pg-input text-xs flex-1"
+            aria-label="Filter to date"
+            title="To date"
+          />
+          {(search || statusFilter !== 'ALL' || methodFilter !== 'ALL' || dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('ALL');
+                setMethodFilter('ALL');
+                setDateFrom('');
+                setDateTo('');
+                setPage(1);
+              }}
+              className="pg-btn-secondary px-2 text-[11px] shrink-0"
+              title="Clear all filters"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {isError && <ErrorBanner message={extractErrorMessage(error)} onRetry={() => refetch()} />}

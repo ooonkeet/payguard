@@ -1,6 +1,8 @@
 """Test Reporting & Quality Metrics REST Endpoints."""
 
-from fastapi import APIRouter, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -11,9 +13,23 @@ router = APIRouter(prefix="/api/v1/reports", tags=["Reporting"])
 
 
 @router.get("/metrics")
-def quality_metrics(db: Session = Depends(get_db)) -> dict:
-    data = reporting_service.get_quality_metrics(db)
+def quality_metrics(
+    suite_name: Optional[str] = Query(default=None),
+    include_seeded: bool = Query(default=True),
+    db: Session = Depends(get_db),
+) -> dict:
+    data = reporting_service.get_quality_metrics(db, suite_name=suite_name, include_seeded=include_seeded)
     return {"success": True, "data": data}
+
+
+@router.get("/failure-analysis")
+def failure_analysis(
+    suite_name: Optional[str] = Query(default=None),
+    include_seeded: bool = Query(default=True),
+    db: Session = Depends(get_db),
+) -> dict:
+    data = reporting_service.get_quality_metrics(db, suite_name=suite_name, include_seeded=include_seeded)
+    return {"success": True, "data": data["failure_analysis"]}
 
 
 @router.get("/transactions.csv")

@@ -265,6 +265,19 @@ def test_reporting_metrics_and_csv_downloads(client: TestClient, payment_payload
 
 
 @pytest.mark.contract
+def test_reporting_filters_and_failure_analysis_endpoint(client: TestClient, payment_payload_factory) -> None:
+    client.post("/api/v1/payments", json=payment_payload_factory(scenario="insufficient_balance"))
+    fa_resp = client.get("/api/v1/reports/failure-analysis?include_seeded=false")
+    assert fa_resp.status_code == 200
+    fa = fa_resp.json()["data"]
+    assert any(item["response_code"] == "PG_402_INSUFFICIENT_FUNDS" for item in fa["transaction_failure_breakdown"])
+
+    filtered = client.get("/api/v1/reports/metrics?suite_name=smoke&include_seeded=false")
+    assert filtered.status_code == 200
+    assert filtered.json()["data"]["summary"]["total_runs"] == 0
+
+
+@pytest.mark.contract
 def test_api_console_rejects_external_host_ssrf(client: TestClient) -> None:
     resp = client.post(
         "/api/v1/collections/execute",

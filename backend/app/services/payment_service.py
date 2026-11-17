@@ -127,6 +127,31 @@ def _to_transaction_out(tx: Transaction, idempotent_replay: bool = False) -> Tra
     return data
 
 
+def _wait_for_settled_transaction(
+    db: Session,
+    tx: Transaction,
+    max_wait_seconds: float = 3.0,
+    poll_interval: float = 0.04,
+) -> Transaction:
+    """
+    If a concurrent primary request is still transitioning CREATED -> PROCESSING -> terminal state,
+    wait briefly and refresh from DB so idempotent replays return the settled state instead of
+    exposing an intermediate PROCESSING snapshot.
+    """
+    deadline = time.perf_counter() + max_wait_seconds
+    current = tx
+    while current.status in (PaymentStatus.CREATED.value, PaymentStatus.PROCESSING.value):
+        if time.perf_counter() >= deadline:
+            break
+        time.sleep(poll_interval)
+        db.expire_all()
+        refreshed = db.scalar(select(Transaction).where(Transaction.id == current.id))
+        if refreshed is None:
+            break
+        current = refreshed
+    return current
+
+
 def create_payment(
     db: Session,
     payload: PaymentCreateRequest,
@@ -148,11 +173,12 @@ def create_payment(
                 idempotency_key=payload.idempotency_key,
                 existing_transaction_id=existing.transaction_id,
             )
+        settled = _wait_for_settled_transaction(db, existing)
         logger.info(
             "Idempotent replay served from persisted transaction",
-            extra={"extra_data": {"transaction_id": existing.transaction_id, "idempotency_key": payload.idempotency_key}},
+            extra={"extra_data": {"transaction_id": settled.transaction_id, "idempotency_key": payload.idempotency_key}},
         )
-        return _to_transaction_out(existing, idempotent_replay=True), True
+        return _to_transaction_out(settled, idempotent_replay=True), True
 
     # 2. Construct initial CREATED transaction record and persist immediately to claim idempotency lock
     tx_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
@@ -219,7 +245,8 @@ def create_payment(
                 idempotency_key=payload.idempotency_key,
                 existing_transaction_id=concurrent_existing.transaction_id,
             )
-        return _to_transaction_out(concurrent_existing, idempotent_replay=True), True
+        settled = _wait_for_settled_transaction(db, concurrent_existing)
+        return _to_transaction_out(settled, idempotent_replay=True), True
 
     # 3. Validate & transition CREATED -> PROCESSING
     timeline.append(

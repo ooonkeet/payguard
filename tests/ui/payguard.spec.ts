@@ -150,7 +150,7 @@ test.describe('PayGuard End-to-End QA Automation Suite', () => {
     await expect(page.getByText(/EXACT DECIMAL MATCH/i)).toBeVisible();
   });
 
-  test('11. Bug Tracker creates and persists a new defect report', async ({ page }) => {
+  test('11. Bug Tracker creates, edits, and persists a defect report', async ({ page }) => {
     await page.goto('/bugs');
     await expect(page.getByRole('heading', { name: 'Bug Tracker' })).toBeVisible();
 
@@ -160,7 +160,16 @@ test.describe('PayGuard End-to-End QA Automation Suite', () => {
     await page.locator('form textarea').first().fill('Logged automatically during Playwright E2E validation.');
     await page.getByRole('button', { name: 'Create Bug' }).click();
 
-    await expect(page.getByRole('cell', { name: bugTitle })).toBeVisible();
+    const cell = page.getByRole('cell', { name: bugTitle });
+    await expect(cell).toBeVisible();
+
+    // Open detail modal and verify full Edit Defect flow
+    await cell.click();
+    await page.getByRole('button', { name: /Edit Defect/i }).click();
+    const updatedTitle = `${bugTitle} [Edited]`;
+    await page.getByRole('dialog').locator('input').first().fill(updatedTitle);
+    await page.getByRole('button', { name: /Save Changes/i }).click();
+    await expect(page.getByRole('heading', { name: updatedTitle })).toBeVisible();
   });
 
   test('12. Responsive mobile layout opens navigation drawer cleanly', async ({ page }) => {
@@ -172,6 +181,8 @@ test.describe('PayGuard End-to-End QA Automation Suite', () => {
     await expect(page.getByRole('link', { name: 'Test Reports' })).toBeVisible();
     await page.getByRole('link', { name: 'Test Reports' }).click();
     await expect(page.getByRole('heading', { name: /Test Reports & Quality Metrics/i })).toBeVisible();
+    await page.locator('#report-suite-filter').selectOption('smoke');
+    await expect(page.getByText('Automated Test Pass Rate')).toBeVisible();
   });
 });
 

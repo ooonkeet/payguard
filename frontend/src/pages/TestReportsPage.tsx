@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, ExternalLink, Info, RefreshCw } from 'lucide-react';
 import {
@@ -18,14 +18,21 @@ import { extractErrorMessage, payguardApi } from '../services/api';
 import { formatDateTime } from '../utils/format';
 
 export const TestReportsPage: React.FC = () => {
+  const [suiteFilter, setSuiteFilter] = useState<string>('ALL');
+  const [includeSeeded, setIncludeSeeded] = useState<boolean>(true);
+
   const reportQ = useQuery({
-    queryKey: ['reports', 'metrics'],
-    queryFn: payguardApi.getReportMetrics,
+    queryKey: ['reports', 'metrics', suiteFilter, includeSeeded],
+    queryFn: () =>
+      payguardApi.getReportMetrics({
+        suite_name: suiteFilter !== 'ALL' ? suiteFilter : undefined,
+        include_seeded: includeSeeded,
+      }),
   });
 
   const runsQ = useQuery({
-    queryKey: ['test-runs'],
-    queryFn: () => payguardApi.listTestRuns(),
+    queryKey: ['test-runs', suiteFilter],
+    queryFn: () => payguardApi.listTestRuns(suiteFilter !== 'ALL' ? suiteFilter : undefined),
   });
 
   const summary = reportQ.data?.summary;
@@ -63,6 +70,43 @@ export const TestReportsPage: React.FC = () => {
             Refresh
           </button>
         </div>
+      </div>
+
+      {/* Report Filters */}
+      <div className="pg-card p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label htmlFor="report-suite-filter" className="text-slate-400">
+              Test Suite:
+            </label>
+            <select
+              id="report-suite-filter"
+              value={suiteFilter}
+              onChange={(e) => setSuiteFilter(e.target.value)}
+              className="pg-select py-1 text-xs"
+            >
+              <option value="ALL">All Suites</option>
+              <option value="all">all</option>
+              <option value="smoke">smoke</option>
+              <option value="regression">regression</option>
+              <option value="edge_cases">edge_cases</option>
+              <option value="api_contract">api_contract</option>
+              <option value="database">database</option>
+            </select>
+          </div>
+          <label className="inline-flex items-center gap-2 text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeSeeded}
+              onChange={(e) => setIncludeSeeded(e.target.checked)}
+              className="accent-emerald-500"
+            />
+            Include seeded demo baseline
+          </label>
+        </div>
+        <span className="text-[11px] font-mono text-slate-500">
+          {includeSeeded ? 'Showing Seeded + Live Runs' : 'Live Executions Only'}
+        </span>
       </div>
 
       {reportQ.isError && <ErrorBanner message={extractErrorMessage(reportQ.error)} />}

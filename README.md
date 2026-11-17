@@ -167,7 +167,7 @@ docker compose up --build
 ## 11. Running Automated Backend Tests (Pytest)
 
 ```bash
-# Run all 64 backend tests with coverage & self-contained HTML report:
+# Run all 66 backend tests with coverage & self-contained HTML report:
 .\.venv\Scripts\pytest.exe tests/api tests/payment tests/webhooks tests/database tests/integration \
   --cov=backend/app --cov-report=term-missing \
   --html=reports/pytest-report.html --self-contained-html -v
@@ -256,7 +256,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/validation/run \
 
 ## 16. Test Scenarios
 
-See [`docs/TEST_SCENARIOS.md`](docs/TEST_SCENARIOS.md) for the complete catalog of **64 Pytest backend tests** and **12 Playwright E2E UI tests**.
+See [`docs/TEST_SCENARIOS.md`](docs/TEST_SCENARIOS.md) for the complete catalog of **66 Pytest backend tests** and **12 Playwright E2E UI tests**.
 
 ---
 
